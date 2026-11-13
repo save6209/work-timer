@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>每晚 30 分鐘徒手運動計時器</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#181b22; --text:#f2f3f5; --muted:#8b92a1;
+    --warm:#f5a524; --work:#22c55e; --rest:#3b82f6; --cool:#a78bfa; --track:#262a33;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    display:flex;flex-direction:column;align-items:center;-webkit-user-select:none;user-select:none}
+  .wrap{width:100%;max-width:440px;padding:20px 18px 28px;display:flex;flex-direction:column;gap:16px;min-height:100%}
+  header{display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:17px;font-weight:600;letter-spacing:.5px}
+  .total{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .phase{align-self:center;font-size:13px;font-weight:700;letter-spacing:2px;padding:5px 14px;border-radius:99px;background:var(--track);color:var(--muted)}
+  .ringbox{position:relative;width:min(78vw,300px);aspect-ratio:1;align-self:center}
+  svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring-bg{fill:none;stroke:var(--track);stroke-width:14}
+  .ring{fill:none;stroke:var(--muted);stroke-width:14;stroke-linecap:round;transition:stroke .3s}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:0 30px}
+  .time{font-size:72px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .name{font-size:22px;font-weight:600}
+  .tip{font-size:13px;color:var(--muted);text-align:center;min-height:18px}
+  .next{background:var(--card);border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:15px}
+  .next span:first-child{color:var(--muted);font-size:13px}
+  .progress{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--track)}
+  .dot.done{background:var(--work)}
+  .dot.now{background:var(--text)}
+  .controls{display:flex;gap:10px;margin-top:auto}
+  button{font:inherit;border:none;border-radius:14px;padding:16px 0;font-size:17px;font-weight:600;cursor:pointer;color:var(--text);background:var(--card);flex:1}
+  button.primary{background:var(--work);color:#06210f;flex:2}
+  button:active{transform:scale(.97)}
+  .settings{background:var(--card);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:10px 12px;align-items:center;font-size:14px}
+  .settings label{color:var(--muted)}
+  .stepper{display:flex;align-items:center;gap:8px}
+  .stepper button{flex:none;width:34px;height:34px;padding:0;font-size:18px;border-radius:10px;background:var(--track)}
+  .stepper output{min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
+  .toggle{display:flex;gap:6px}
+  .toggle button{flex:none;padding:7px 12px;font-size:13px;border-radius:10px;background:var(--track);color:var(--muted)}
+  .toggle button.on{background:var(--text);color:var(--bg)}
+  .done-msg{text-align:center;font-size:15px;color:var(--muted);line-height:1.7}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>每晚徒手運動</h1>
+    <div class="total" id="total">總時長 30:00</div>
+  </header>
+
+  <div class="phase" id="phase">準備開始</div>
+
+  <div class="ringbox">
+    <svg viewBox="0 0 120 120">
+      <circle class="ring-bg" cx="60" cy="60" r="52"/>
+      <circle class="ring" id="ring" cx="60" cy="60" r="52"/>
+    </svg>
+    <div class="center">
+      <div class="time" id="time">30:00</div>
+      <div class="name" id="name">按「開始」</div>
+    </div>
+  </div>
+
+  <div class="tip" id="tip">暖身 5 分 → 主訓練 20 分 → 收操 5 分</div>
+
+  <div class="progress" id="progress"></div>
+
+  <div class="next" id="nextBox"><span>下一個</span><span id="next">原地踏步</span></div>
+
+  <div class="settings" id="settings">
+    <label>運動秒數</label>
+    <div class="stepper"><button data-k="work" data-d="-5">−</button><output id="o-work">40</output><button data-k="work" data-d="5">＋</button></div>
+    <label>休息秒數</label>
+    <div class="stepper"><button data-k="rest" data-d="-5">−</button><output id="o-rest">20</output><button data-k="rest" data-d="5">＋</button></div>
+    <label>主訓練輪數</label>
+    <div class="stepper"><button data-k="rounds" data-d="-1">−</button><output id="o-rounds">4</output><button data-k="rounds" data-d="1">＋</button></div>
+    <label>提示</label>
+    <div class="toggle"><button id="t-beep" class="on">嗶聲</button><button id="t-voice" class="on">語音</button></div>
+  </div>
+
+  <div class="done-msg hidden" id="doneMsg">🎉 今天的 30 分鐘完成了！<br>喝點水，早點休息。</div>
+
+  <div class="controls">
+    <button id="back">上一段</button>
+    <button id="main" class="primary">開始</button>
+    <button id="skip">跳過</button>
+  </div>
+</div>
+
+<script>
+const WARMUP = [
+  {name:"原地踏步", tip:"抬膝、擺手，慢慢讓身體熱起來"},
+  {name:"開合跳", tip:"怕吵可改成原地快走、手臂上舉"},
+  {name:"手臂繞圈", tip:"前繞 30 秒、後繞 30 秒"},
+  {name:"深蹲擺臂", tip:"輕鬆半蹲，手臂往前擺"},
+  {name:"弓步轉體", tip:"前腳彎曲，上身轉向前腳那側"}
+];
+const MAIN = [
+  {name:"深蹲", tip:"膝蓋跟腳尖同方向，臀部往後坐"},
+  {name:"伏地挺身", tip:"太吃力就改跪姿，身體保持一直線"},
+  {name:"弓箭步", tip:"左右交替，後膝接近地面"},
+  {name:"平板支撐", tip:"收腹夾臀，不要塌腰"},
+  {name:"臀橋", tip:"躺下屈膝，臀部往上推、頂端停一下"}
+];
+const COOL = [
+  {name:"大腿前側伸展", tip:"站姿抓腳背往後拉，左右各半"},
+  {name:"大腿後側伸展", tip:"坐姿腿伸直，身體往前傾"},
+  {name:"臀部伸展", tip:"躺姿翹二郎腿，抱腿拉向胸口"},
+  {name:"胸肩伸展", tip:"雙手背後交扣，挺胸往後拉"},
+  {name:"深呼吸放鬆", tip:"躺平，慢慢吸氣 4 秒、吐氣 6 秒"}
+];
+const COLORS = {warm:"var(--warm)", work:"var(--work)", rest:"var(--rest)", cool:"var(--cool)"};
+const PHASE_LABEL = {warm:"暖身", work:"運動", rest:"休息", cool:"收操"};
+
+let cfg = {work:40, rest:20, rounds:4};
+try { const s = JSON.parse(localStorage.getItem("wt-cfg")); if (s) cfg = {...cfg, ...s}; } catch(e){}
+let beepOn = true, voiceOn = true;
+
+let plan = [], idx = 0, remain = 0, running = false, started = false, timer = null, lastTick = 0, wakeLock = null;
+
+function buildPlan(){
+  plan = [];
+  WARMUP.forEach(x => plan.push({...x, type:"warm", sec:60}));
+  for (let r = 1; r <= cfg.rounds; r++){
+    MAIN.forEach((x, i) => {
+      plan.push({...x, type:"work", sec:cfg.work, round:r});
+      const last = r === cfg.rounds && i === MAIN.length - 1;
+      if (!last && cfg.rest > 0) plan.push({name:"休息", tip:"", type:"rest", sec:cfg.rest, round:r});
+    });
+  }
+  COOL.forEach(x => plan.push({...x, type:"cool", sec:60}));
+}
+const totalSec = () => plan.reduce((a, s) => a + s.sec, 0);
+const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); };
+
+const $ = id => document.getElementById(id);
+const ring = $("ring"), C = 2 * Math.PI * 52;
+ring.style.strokeDasharray = C;
+
+function nextLabel(i){
+  for (let j = i + 1; j < plan.length; j++) if (plan[j].type !== "rest") return plan[j].name;
+  return "完成 🎉";
+}
+function renderProgress(){
+  const p = $("progress"); p.innerHTML = "";
+  const works = plan.map((s, i) => [s, i]).filter(([s]) => s.type === "work");
+  works.forEach(([s, i]) => {
+    const d = document.createElement("div");
+    d.className = "dot" + (i < idx ? " done" : i === idx ? " now" : "");
+    p.appendChild(d);
+  });
+}
+function render(){
+  const s = plan[idx];
+  if (!started){
+    $("time").textContent = fmt(totalSec());
+    $("name").textContent = "按「開始」";
+    $("phase").textContent = "準備開始"; $("phase").style.color = "";
+    $("tip").textContent = `暖身 5 分 → 主訓練 ${cfg.rounds} 輪 → 收操 5 分`;
+    $("next").textContent = plan[0].name;
+    ring.style.stroke = "var(--muted)"; ring.style.strokeDashoffset = 0;
+    $("total").textContent = "總時長 " + fmt(totalSec());
+    renderProgress(); return;
+  }
+  let label = PHASE_LABEL[s.type];
+  if (s.round) label += `・第 ${s.round}/${cfg.rounds} 輪`;
+  $("phase").textContent = label; $("phase").style.color = COLORS[s.type];
+  $("time").textContent = fmt(remain);
+  $("name").textContent = s.type === "rest" ? "休息" : s.name;
+  $("tip").textContent = s.type === "rest" ? "下一個：" + nextLabel(idx) : s.tip;
+  $("next").textContent = nextLabel(idx);
+  ring.style.stroke = COLORS[s.type];
+  ring.style.strokeDashoffset = C * (1 - remain / s.sec);
+  const left = remain + plan.slice(idx + 1).reduce((a, x) => a + x.sec, 0);
+  $("total").textContent = "剩餘 " + fmt(left);
+  renderProgress();
+}
+
+// ---- sound & voice ----
+let actx = null;
+function ensureAudio(){ try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch(e){} }
+function beep(freq = 880, dur = .15, vol = .25){
+  if (!beepOn || !actx) return;
+  try {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = "sine";
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + dur);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+  } catch(e){}
+}
+function say(text){
+  if (!voiceOn || !("speechSynthesis" in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-TW"; u.rate = 1.05;
+    speechSynthesis.speak(u);
+  } catch(e){}
+}
+function announce(){
+  const s = plan[idx];
+  if (s.type === "rest") say("休息，下一個 " + nextLabel(idx));
+  else say(s.name);
+  beep(s.type === "rest" ? 520 : 990, .35, .3);
+}
+
+// ---- wake lock ----
+async function keepAwake(on){
+  try {
+    if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => wakeLock = null); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && running) keepAwake(true); });
+
+// ---- engine ----
+function goto(i){
+  if (i >= plan.length){ finish(); return; }
+  idx = Math.max(0, i); remain = plan[idx].sec; announce(); render();
+}
+function tick(){
+  const now = performance.now(), dt = (now - lastTick) / 1000; lastTick = now;
+  const before = Math.ceil(remain);
+  remain -= dt;
+  const after = Math.ceil(remain);
+  if (after !== before && after <= 3 && after > 0) beep(660, .12, .2);
+  if (remain <= 0) goto(idx + 1); else render();
+}
+function start(){
+  ensureAudio();
+  if (!started){ started = true; $("settings").classList.add("hidden"); $("doneMsg").classList.add("hidden"); goto(0); }
+  running = true; lastTick = performance.now();
+  timer = setInterval(tick, 200);
+  $("main").textContent = "暫停"; $("main").style.background = "var(--warm)";
+  keepAwake(true);
+}
+function pause(){
+  running = false; clearInterval(timer);
+  $("main").textContent = "繼續"; $("main").style.background = "var(--work)";
+  keepAwake(false);
+}
+function finish(){
+  pause(); started = false; idx = 0;
+  say("完成！今天辛苦了"); beep(990,.2); setTimeout(() => beep(1320,.4), 220);
+  $("main").textContent = "再來一次";
+  $("settings").classList.remove("hidden"); $("doneMsg").classList.remove("hidden");
+  render();
+  $("phase").textContent = "完成"; $("time").textContent = "0:00"; $("name").textContent = "完成 🎉";
+}
+
+$("main").onclick = () => running ? pause() : start();
+$("skip").onclick = () => { if (!started) return; ensureAudio(); goto(idx + 1); };
+$("back").onclick = () => { if (!started) return; ensureAudio(); goto(idx - 1); };
+
+document.querySelectorAll(".stepper button").forEach(b => b.onclick = () => {
+  const k = b.dataset.k, d = +b.dataset.d;
+  const lim = {work:[10,120], rest:[0,90], rounds:[1,8]}[k];
+  cfg[k] = Math.min(lim[1], Math.max(lim[0], cfg[k] + d));
+  $("o-" + k).textContent = cfg[k];
+  try { localStorage.setItem("wt-cfg", JSON.stringify(cfg)); } catch(e){}
+  buildPlan(); render();
+});
+$("t-beep").onclick = e => { beepOn = !beepOn; e.target.classList.toggle("on", beepOn); };
+$("t-voice").onclick = e => { voiceOn = !voiceOn; e.target.classList.toggle("on", voiceOn); };
+
+["work","rest","rounds"].forEach(k => $("o-" + k).textContent = cfg[k]);
+buildPlan(); render();
+</script>
+</body>
+</html>
